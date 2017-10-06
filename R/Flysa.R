@@ -3,6 +3,7 @@ library(tidyverse)
 library(FLAssess)
 library(FLXSA)
 library(FLa4a)
+library(FLSAM)
 
 dat <- 
   paste0("http://data.hafro.is/assmt/2017/haddock/",
@@ -97,11 +98,37 @@ had <-
                                    unit = 'g'))
 landings(had) <- computeCatch(had)
 
-smb <- FLIndex(index = as.FLQuant(dat %>% 
-                                    filter(slot == 'smb',year < 2017) %>% 
+smb <- FLIndex(type = 'number',
+               index = as.FLQuant(dat %>% 
+                                    filter(slot == 'smb',year < 2017,age<11) %>% 
                                     ungroup() %>% 
                                     select(year,age,data)%>% 
-                                    mutate(data = ifelse(data == 0, 0.0001,data))))
+                                    mutate(data = ifelse(data == 0, 0.0001,data))),
+               catch.n = as.FLQuant(dat %>% 
+                                      filter(slot == 'smb',year < 2017,age<11) %>% 
+                                      ungroup() %>% 
+                                      select(year,age,data)%>% 
+                                      mutate(data = ifelse(data == 0, 0.0001,data))),
+               effort = as.FLQuant(data_frame(year=1985:2016,data=1),quant = 'age'))
+
+smh <- FLIndex(type = 'number',
+               index = as.FLQuant(dat %>% 
+                                    filter(slot == 'smh',year < 2017,age<11) %>% 
+                                    ungroup() %>% 
+                                    select(year,age,data)%>% 
+                                    mutate(data = ifelse(data == 0, 0.0001,data))),
+               catch.n = as.FLQuant(dat %>% 
+                                      filter(slot == 'smh',year < 2017,age<11) %>% 
+                                      ungroup() %>% 
+                                      select(year,age,data)%>% 
+                                      mutate(data = ifelse(data == 0, 0.0001,data))),
+               effort = as.FLQuant(data_frame(year=1996:2016,data=1),quant = 'age'))
+
+
+range(smb)[["startf"]] <- 0.66
+range(smb)[["endf"]] <- 0.75
+range(smh)[["startf"]] <- 0.66
+range(smh)[["endf"]] <- 0.75
 
 
 harvest(had)[ac(range(had)["max"]), ]     <- 1
@@ -109,6 +136,16 @@ harvest(had)[, ac(range(had)["maxyear"])] <- 1
 had.vpa <- VPA(had, fit.plusgroup = F)
 had.new <- had + had.vpa
 landings(had.new) <- computeCatch(had.new)
-plot(had.new)
 
-sca(had,smb)
+fit.smb <- sca(had,FLIndices(smb))
+fit.smh <- sca(had,FLIndices(smh))
+fit.smx <- sca(had,FLIndices(smb,smh))
+
+plot(FLStocks(smb=had+fit.smb,smh=had+fit.smh, smx = had + fit.smx,vpa=had.new))
+
+
+## SAM
+ctrl <- FLSAM.control(had,FLIndices(smb))
+sam <- FLSAM(had,FLIndices(smh),ctrl)
+
+plot(FLStocks(smb=had+fit.smb,smh=had+fit.smh, smx = had + fit.smx,vpa=had.new,sam=had+sam))
